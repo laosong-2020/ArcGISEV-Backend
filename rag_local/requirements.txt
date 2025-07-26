@@ -1,0 +1,10 @@
+langchain
+langchain-chroma
+chromadb
+beautifulsoup4
+requests
+tldextract
+fastapi
+uvicorn
+openai
+python-dotenv
