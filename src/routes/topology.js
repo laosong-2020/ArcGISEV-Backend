@@ -3,9 +3,8 @@
 import express from 'express';
 const router = express.Router();
 
-import { getPortalInfo, getPortalWebAdaptorInfo } from '../services/portal.js';
-import { getServerInfo, getServerWebAdaptorInfo, getDataStoreInfo } from '../services/server.js';
-import { buildEdges } from '../services/edgeBuilder.js';
+import enterprise from '../services/enterpriseModel.js';
+// import { buildEdges } from '../services/edgeBuilder.js';
 
 router.get('/', async (req, res) => {
   const nodes = []
@@ -19,7 +18,7 @@ router.get('/', async (req, res) => {
     const token = req.session.accessToken;
     // construct nodes
     // get nodes info
-    const portalWebAdaptorInfo = await getPortalWebAdaptorInfo(token);
+    const portalWebAdaptorInfo = await enterprise._fetchAndSetPortalWAMetaInfo(token);
     // Add portal web adaptor node
     if (portalWebAdaptorInfo) {
       nodes.push({
@@ -31,8 +30,8 @@ router.get('/', async (req, res) => {
         status: 'healthy',
       })
     }
-    
-    const serverWebAdaptorInfo = await getServerWebAdaptorInfo(token);
+
+    const serverWebAdaptorInfo = await enterprise._fetchAndSetServerWAMetaInfo(token);
     // Add server web adaptor node
     if (serverWebAdaptorInfo) {
       nodes.push({
@@ -44,7 +43,7 @@ router.get('/', async (req, res) => {
         status: 'healthy',
       })
     }
-    const portalInfo = await getPortalInfo(token);
+    const portalInfo = await enterprise._fetchAndSetPortalMetaInfo(token);
     // Add portal info
     if (portalInfo) {
       nodes.push({
@@ -56,7 +55,7 @@ router.get('/', async (req, res) => {
         //status: portalInfo.success ? 'healthy' : 'error',
       })
     }
-    const serverInfo = await getServerInfo(token);
+    const serverInfo = await enterprise._fetchAndSetServerMetaInfo(token);
     // Add server info
     if (serverInfo) {
       nodes.push({
@@ -68,7 +67,7 @@ router.get('/', async (req, res) => {
         //status: serverInfo.success ? 'healthy' : 'error',
       })
     }
-    const dataStoreInfo = await getDataStoreInfo(token);
+    const dataStoreInfo = await enterprise._fetchAndSetDataStores(token);
     // Add data store info
     if (dataStoreInfo) {
       nodes.push({
@@ -87,7 +86,7 @@ router.get('/', async (req, res) => {
   }
   // Construct edges
   try{
-    const edges = buildEdges(nodes);
+    const edges = await enterprise.connections;
     return res.status(200).json({
       success: true,
       data: {
