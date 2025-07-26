@@ -10,6 +10,10 @@ import enterprise from './services/enterpriseModel.js';
 // Load routes
 import oauthRouter from './routes/oauth/exchange.js';
 
+import portalRouter from './routes/portal.js';
+import serverRouter from './routes/server.js';
+import datastoreRouter from './routes/datastore.js';
+
 // Load middleware
 import ensureToken from './middleware/token.js';
 
@@ -56,6 +60,10 @@ app.use(
 );
 
 app.use('/api/oauth', oauthRouter);
+
+app.use('/api/portal', ensureToken, portalRouter);
+app.use('/api/server', ensureToken, serverRouter);
+app.use('/api/datastore', ensureToken, datastoreRouter);
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://${HOST}:${PORT}`)
