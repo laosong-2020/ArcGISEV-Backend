@@ -1,15 +1,14 @@
 // src/routes/portal.js
-
-import express from "express";
+import express from 'express';
 import axios from 'axios';
 import https from 'https';
 
 import config from '../config.js';
-import enterprise from "../services/enterpriseModel.js";
+import enterprise from '../services/enterpriseModel.js';
 
 const router = express.Router();
 
-// dev mode https agent
+// under dev mode, ignore ssl 
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 const {
