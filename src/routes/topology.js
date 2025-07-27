@@ -86,6 +86,7 @@ router.get('/', async (req, res) => {
   }
   // Construct edges
   try{
+    await enterprise._updatePortalServerConnection(req.session.accessToken);
     const edges = await enterprise.connections;
     return res.status(200).json({
       success: true,
