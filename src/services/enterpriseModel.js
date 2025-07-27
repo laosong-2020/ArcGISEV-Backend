@@ -477,6 +477,54 @@ export class EnterpriseModel {
     return;
   }
 
+  async _updateServerDataStoreConnection(token) {
+    const rasterStoresInfo = await this._fetchRasterStoreDataStores(token);
+    if (!rasterStoresInfo || rasterStoresInfo.length === 0) {
+      throw new Error('No raster stores found');
+    }
+    const rasterStoreInfo = rasterStoresInfo[0]; // Assuming we take the first raster store
+    try {
+      const resp = await axios.post(
+        `${this._server.url}/admin/data/validateDataItem`,
+        {},
+        {
+          params: {
+            f:'json',
+            token: token,
+            item: JSON.stringify(rasterStoreInfo),
+          },
+          httpsAgent,
+        }
+      )
+      if (!resp.data) {
+        throw new Error('Failed to validate raster store data item');
+      }
+      const machineInfo = resp.data.machines[0];
+      const serverDataStoreConnection = this.connections.find(
+        (connection) => connection.source === 'server' && connection.target === 'dataStore'
+      )
+      if (!serverDataStoreConnection) {
+        throw new Error('Server and data store connection not found');
+      }
+      // 1. if the response code is not 200, set the status to 'error'
+      if (resp.status !== 200) {
+        serverDataStoreConnection.status = 'error';
+      } else {
+        if (resp.data.machines[0].status === 'error') {
+          serverDataStoreConnection.status = 'warning';
+          serverDataStoreConnection.messages = machineInfo.dataItems || [];
+        } else {
+          serverDataStoreConnection.status = 'Connected';
+          serverDataStoreConnection.messages = [];
+        }
+      }
+      return;
+    } catch (err) {
+      console.error('Failed to validate raster store data item:', err);
+      return;
+    }
+  }
+
   async _setAll(token){
     await this._fetchAndSetPortalMetaInfo(token);
     await this._fetchAndSetServerMetaInfo(token);
@@ -485,6 +533,7 @@ export class EnterpriseModel {
     await this._fetchAndSetDataStores(token);
     // fetch and set all connections
     await this._updatePortalServerConnection(token);
+    await this._updateServerDataStoreConnection(token);
   }
 }
 
