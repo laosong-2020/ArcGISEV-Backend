@@ -499,7 +499,6 @@ export class EnterpriseModel {
       if (!resp.data) {
         throw new Error('Failed to validate raster store data item');
       }
-      const machineInfo = resp.data.machines[0];
       const serverDataStoreConnection = this.connections.find(
         (connection) => connection.source === 'server' && connection.target === 'dataStore'
       )
@@ -510,12 +509,20 @@ export class EnterpriseModel {
       if (resp.status !== 200) {
         serverDataStoreConnection.status = 'error';
       } else {
-        if (resp.data.machines[0].status === 'error') {
-          serverDataStoreConnection.status = 'warning';
-          serverDataStoreConnection.messages = machineInfo.dataItems || [];
-        } else {
+        const data = resp.data;
+        if (data.status === 'success') {
           serverDataStoreConnection.status = 'Connected';
           serverDataStoreConnection.messages = [];
+        } else {
+          if (data.machines && data.machines.length > 0) {
+            serverDataStoreConnection.status = 'warning';
+            serverDataStoreConnection.messages = data.machines[0].dataItems || [];
+          } else {
+            serverDataStoreConnection.status = 'error';
+            serverDataStoreConnection.messages = ['No machines found in the response'];
+            throw new Error('No machines found in the response');
+
+          }
         }
       }
       return;
