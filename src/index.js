@@ -12,7 +12,9 @@ import oauthRouter from './routes/oauth/exchange.js';
 
 import portalRouter from './routes/portal.js';
 import serverRouter from './routes/server.js';
-import datastoreRouter from './routes/datastore.js';
+import dataStoreRouter from './routes/dataStore.js';
+
+import topologyRouter from './routes/topology.js';
 
 // Load middleware
 import ensureToken from './middleware/token.js';
@@ -33,7 +35,7 @@ app.use((req, res, next) => {
 });
 
 const corsOptions = {
-  origin: `${config.FRONTEND_URL}`,
+  origin: 'http://localhost:5173',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
@@ -63,7 +65,9 @@ app.use('/api/oauth', oauthRouter);
 
 app.use('/api/portal', ensureToken, portalRouter);
 app.use('/api/server', ensureToken, serverRouter);
-app.use('/api/datastore', ensureToken, datastoreRouter);
+app.use('/api/dataStore', ensureToken, dataStoreRouter);
+app.use('/api/topology', ensureToken, topologyRouter);
+
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://${HOST}:${PORT}`)

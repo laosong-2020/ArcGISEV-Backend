@@ -17,15 +17,30 @@ export class EnterpriseModel {
       version: null,
       build: null,
     };
+    this._serverMetaInfo = {
+      id: null,
+      name: null,
+      url: null,
+    };
     this._server = {
       baseUrl: config.SERVER_BASE_URL,
       url: '',
       version: null,
       build: null,
     };
+    this.connections = [
+      { source: 'client', target: 'portalAdaptor', status: 'Connected' },
+      { source: 'client', target: 'serverAdaptor', status: 'Connected' },
+      { source: 'portalAdaptor', target: 'portal', status: 'Connected' },
+      { source: 'serverAdaptor', target: 'server', status: 'Connected' },
+      { source: 'portal', target: 'server', status: 'Connected' },
+      { source: 'server', target: 'dataStore', status: 'Connected' },
+    ];
     this._initUrls();
     this._dataStores = [];
+
   }
+
   async _initUrls() {
     try {
       const resp = await axios.get(`${this._portal.baseUrl}/sharing/rest/info/portal`, {
@@ -95,6 +110,38 @@ export class EnterpriseModel {
     }
   }
   async _fetchAndSetServerMetaInfo(token) {
+    try {
+      const resp = await axios.get(`${this._portal.url}/portaladmin/federation/servers`, {
+        params: {
+          f: 'json',
+          token: token,
+        },
+        httpsAgent,
+      })
+      if (!resp.data) {
+        throw new Error('Failed to fetch server meta info');
+      }
+      // if the length is 0, throw an error
+      if (resp.data.servers.length === 0) {
+        throw new Error('No server found in the federation');
+      }
+      // use the first server in the list
+      const serverMetaInfo = resp.data.servers[0];
+      this._serverMetaInfo.id = serverMetaInfo.id;
+      this._serverMetaInfo.name = serverMetaInfo.name;
+      this._serverMetaInfo.url = serverMetaInfo.url;
+      this._serverMetaInfo.adminUrl = serverMetaInfo.adminUrl;
+      this._serverMetaInfo.serverRole = serverMetaInfo.serverRole;
+      this._serverMetaInfo.serverFunc = serverMetaInfo.serverFunction;
+
+      return this._serverMetaInfo;
+    }
+    catch (err) {
+      console.error('Failed to fetch server meta info');
+      throw err;
+    }
+  }
+  async _fetchAndSetServerDetails(token) {
     try {
       const resp = await axios.get(`${this._server.url}/admin/info`, {
         params: {
@@ -378,12 +425,115 @@ export class EnterpriseModel {
     }
   }
 
+  async _updatePortalServerConnection(token) {
+    try {
+      // try to fedrate the portal with the server
+      const serverid = this._serverMetaInfo.id;
+      if (serverid === null || serverid === undefined || serverid === '') {
+        throw new Error('Server ID is not set');
+      }
+      const resp = await axios.get(`${this._portal.url}/portaladmin/federation/servers/${serverid}/validate`,
+        {
+          params: {
+            f: 'json',
+            token: token,
+          },
+          httpsAgent,
+        }
+      )
+      // find the connection between portal and server
+      const portalServerConnection = this.connections.find(
+        (connection) => connection.source === 'portal' && connection.target === 'server'
+      );
+      if (!portalServerConnection) {
+        throw new Error('Portal and server connection not found');
+      } else {
+        // 1. if the response code is not 200, set the status to 'error'
+        if (resp.status !== 200) {
+          portalServerConnection.status = 'error';
+        } else {
+          // 2. if the response code is 200, but the response.data.status is "failure", set the status to warning
+          if (resp.data.status === 'failure') {
+            portalServerConnection.status = 'warning';
+            portalServerConnection.messages = resp.data.messages || [];
+          } else {
+            // 3. if the response code is 200 and the response.data.status is "success", set the status to healthy
+            portalServerConnection.status = 'Connected';
+            portalServerConnection.messages = [];
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to update portal-server connection status:', err);
+      // If an error occurs, set the connection status to 'error'
+      const portalServerConnection = this.connections.find(
+        (connection) => connection.source === 'portal' && connection.target === 'server'
+      );
+      if (portalServerConnection) {
+        portalServerConnection.status = 'error';
+        portalServerConnection.messages = [err.message];
+      }
+    }
+    return;
+  }
+
+  async _updateServerDataStoreConnection(token) {
+    const rasterStoresInfo = await this._fetchRasterStoreDataStores(token);
+    if (!rasterStoresInfo || rasterStoresInfo.length === 0) {
+      throw new Error('No raster stores found');
+    }
+    const rasterStoreInfo = rasterStoresInfo[0]; // Assuming we take the first raster store
+    try {
+      const resp = await axios.post(
+        `${this._server.url}/admin/data/validateDataItem`,
+        {},
+        {
+          params: {
+            f:'json',
+            token: token,
+            item: JSON.stringify(rasterStoreInfo),
+          },
+          httpsAgent,
+        }
+      )
+      if (!resp.data) {
+        throw new Error('Failed to validate raster store data item');
+      }
+      const machineInfo = resp.data.machines[0];
+      const serverDataStoreConnection = this.connections.find(
+        (connection) => connection.source === 'server' && connection.target === 'dataStore'
+      )
+      if (!serverDataStoreConnection) {
+        throw new Error('Server and data store connection not found');
+      }
+      // 1. if the response code is not 200, set the status to 'error'
+      if (resp.status !== 200) {
+        serverDataStoreConnection.status = 'error';
+      } else {
+        if (resp.data.machines[0].status === 'error') {
+          serverDataStoreConnection.status = 'warning';
+          serverDataStoreConnection.messages = machineInfo.dataItems || [];
+        } else {
+          serverDataStoreConnection.status = 'Connected';
+          serverDataStoreConnection.messages = [];
+        }
+      }
+      return;
+    } catch (err) {
+      console.error('Failed to validate raster store data item:', err);
+      return;
+    }
+  }
+
   async _setAll(token){
     await this._fetchAndSetPortalMetaInfo(token);
     await this._fetchAndSetServerMetaInfo(token);
     await this._fetchAndSetPortalWAMetaInfo(token);
     await this._fetchAndSetServerWAMetaInfo(token);
     await this._fetchAndSetDataStores(token);
+    // fetch and set all connections
+    await this._updatePortalServerConnection(token);
+    await this._updateServerDataStoreConnection(token);
   }
 }
 
